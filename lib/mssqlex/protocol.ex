@@ -213,7 +213,7 @@ defmodule Mssqlex.Protocol do
   end
 
   defp do_query(query, params, opts, state) do
-    case ODBC.query(state.pid, query.statement, params, opts) do
+    case call_query_function(state.pid, query.statement, params, opts) do
       {:error,
         %Mssqlex.Error{odbc_code: :not_allowed_in_transaction} = reason} ->
         if state.mssql == :auto_commit do
@@ -228,10 +228,30 @@ defmodule Mssqlex.Protocol do
       {:error, reason} ->
         {:error, reason, state}
       {:selected, columns, rows} ->
-        {:ok, %Result{columns: Enum.map(columns, &(to_string(&1))), rows: rows, num_rows: Enum.count(rows)}, state}
+        {:ok, build_result(columns, rows), state}
+      {:executed, _count, data} ->
+        {:ok, build_result([], data), state}
+      result_list when is_list(result_list) ->
+        {:ok, Enum.map(result_list, fn({:selected, c, r}) -> build_result(c, r) end), state}
       {:updated, num_rows} ->
         {:ok, %Result{num_rows: num_rows}, state}
     end
+  end
+
+  defp call_query_function(pid, statement, params, opts) do
+    if Keyword.get(opts, :parameterized, true) == true do
+      ODBC.query(pid, statement, params, opts)
+    else
+      ODBC.sql_query(pid, statement, opts)      
+    end
+  end
+
+  defp build_result(columns, rows) do
+    %Result{
+      columns: Enum.map(columns, &(to_string(&1))), 
+      rows: rows, 
+      num_rows: Enum.count(rows)
+    }
   end
 
   defp switch_auto_commit(new_value, state) do

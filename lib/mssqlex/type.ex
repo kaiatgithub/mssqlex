@@ -11,6 +11,8 @@ defmodule Mssqlex.Type do
     | datetime()
     | Decimal.t()
 
+  @type stored_procedure_param :: {:in | :out | :inout, param()}
+
   @typedoc "Output value."
   @type return_value :: bitstring()
     | integer()

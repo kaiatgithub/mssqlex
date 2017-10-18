@@ -28,6 +28,15 @@ defimpl DBConnection.Query, for: Mssqlex.Query do
   def describe(query, _opts), do: query
 
   @spec encode(query :: Query.t(),
+    params :: [Type.stored_procedure_param()], opts :: Keyword.t()) :: [tuple]
+  def encode(_query, [{io_match,_}|_] = params, opts) when io_match in [:in, :out, :inout] do
+    Enum.map(params, fn({in_out, value}) ->
+      {param_type, param_value} = Type.encode(value, opts)
+      {param_type, in_out, param_value}
+    end)
+  end
+
+  @spec encode(query :: Query.t(),
     params :: [Type.param()], opts :: Keyword.t()) :: [Type.param()]
   def encode(_query, params, opts) do
     Enum.map(params, &(Type.encode(&1, opts)))
@@ -37,6 +46,11 @@ defimpl DBConnection.Query, for: Mssqlex.Query do
     Result.t()
   def decode(_query, %Result{rows: rows} = result, opts) when not is_nil(rows) do
     Map.put(result, :rows, Enum.map(rows, fn row -> Enum.map(row, &(Type.decode(&1, opts))) end))
+  end
+  @spec decode(query :: Query.t(), result :: list(Result.t()), opts :: Keyword.t()) ::
+    list(Result.t())
+  def decode(query, result_list, opts) when is_list(result_list) do
+    Enum.map(result_list, &decode(query, &1, opts))
   end
   def decode(_query, result, _opts), do: result
 end

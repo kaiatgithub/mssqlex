@@ -55,6 +55,28 @@ defmodule Mssqlex.ODBC do
   end
 
   @doc """
+  Sends a non-parametrized query to the ODBC driver.
+  This query-method can return multiple resultsets.
+
+  Interface to `:odbc.sql_query/3`.See
+  [Erlang's ODBC guide](http://erlang.org/doc/apps/odbc/getting_started.html)
+  for usage details and examples.
+
+  `pid` is the `:odbc` process id
+  `statement` is the SQL query string
+  `opts` are options to be passed on to `:odbc`
+  """
+  def sql_query(pid, statement, opts) do
+    if Process.alive?(pid) do
+      GenServer.call(pid,
+        {:sql_query, %{statement: IO.iodata_to_binary(statement)}},
+        Keyword.get(opts, :timeout, 5000))
+    else
+      {:error, %Mssqlex.Error{message: :no_connection}}
+    end
+  end
+
+  @doc """
   Commits a transaction on the ODBC driver.
 
   Note that unless in autocommit mode, all queries are wrapped in
@@ -123,6 +145,12 @@ defmodule Mssqlex.ODBC do
     _from, state) do
     {:reply,
      handle_errors(:odbc.param_query(state, to_charlist(statement), params)),
+     state}
+  end
+
+  def handle_call({:sql_query, %{statement: statement}}, _from, state) do
+    {:reply,
+     handle_errors(:odbc.sql_query(state, to_charlist(statement))),
      state}
   end
 
